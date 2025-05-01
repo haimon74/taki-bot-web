@@ -574,45 +574,61 @@ function TakiGame() {
                   value={discardPile[discardPile.length - 1].value}
                 />
               )}
-              {takiActive && currentPlayer === 0 && (
-                <button
-                  onClick={handleCloseTaki}
-                  className={`text-white px-4 py-2 rounded-lg transition-colors ${
-                    currentColor === 'red' ? 'bg-red-500 hover:bg-red-600' :
-                    currentColor === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
-                    currentColor === 'green' ? 'bg-green-500 hover:bg-green-600' :
-                    currentColor === 'yellow' ? 'bg-yellow-500 hover:bg-yellow-600' :
-                    'bg-purple-500 hover:bg-purple-600'
-                  }`}
-                >
-                  Close TAKI
-                </button>
-              )}
-            </div>
-            <div className="text-center mb-4">
-              <p className="text-lg text-left">Current Color: <span className="font-bold">{currentColor}</span></p>
-              <p className="text-lg text-left">Current Turn: <span className="font-bold">{currentPlayer === 0 ? 'Your Turn' : "Computer's Turn"}</span></p>
-              {!gameOver && (
-                <div className="text-left mt-8">
+              
+              <div className="text-cleft mb-4">
+                <p className="text-lg text-left flex items-center gap-2">
+                  Current Color: 
+                  <span 
+                    className="w-6 h-6 rounded-full inline-block border-2 border-gray-300"
+                    style={{ 
+                      backgroundColor: currentColor === 'red' ? '#ef4444' :
+                                    currentColor === 'blue' ? '#3b82f6' :
+                                    currentColor === 'green' ? '#22c55e' :
+                                    currentColor === 'yellow' ? '#eab308' :
+                                    currentColor === 'purple' ? '#a855f7' :
+                                    currentColor === 'darkgrey' ? '#4b5563' : '#ffffff'
+                    }}
+                  />
+                </p>
+                {takiActive && currentPlayer === 0 && (
                   <button
-                    onClick={handleDraw}
-                    disabled={currentPlayer !== 0}
-                    className={`px-6 py-2 rounded-lg transition-colors ${
-                      currentPlayer === 0
-                        ? 'bg-blue-500 text-white hover:bg-blue-600'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    onClick={handleCloseTaki}
+                    className={`text-white px-4 py-2 rounded-lg transition-colors mt-8 ${
+                      currentColor === 'red' ? 'bg-red-500 hover:bg-red-600' :
+                      currentColor === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
+                      currentColor === 'green' ? 'bg-green-500 hover:bg-green-600' :
+                      currentColor === 'yellow' ? 'bg-yellow-500 hover:bg-yellow-600' :
+                      'bg-purple-500 hover:bg-purple-600'
                     }`}
                   >
-                    {drawAmount > 1 ? `Draw +${drawAmount} Cards` : 'Draw Card'}
+                    Close TAKI
                   </button>
-                  {gameMessage && <p className="mt-4 text-red-500">{gameMessage}</p>}
-                </div>
-              )}
+                )}
+              {!gameOver && !takiActive && (
+                  <div className="text-left mt-8">
+                    <button
+                      onClick={handleDraw}
+                      disabled={currentPlayer !== 0}
+                      className={`px-6 py-2 rounded-lg transition-colors ${
+                        currentPlayer === 0
+                          ? 'bg-blue-500 text-white hover:bg-blue-600'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {drawAmount > 1 ? `Draw +${drawAmount} Cards` : 'Draw Card'}
+                    </button>
+                    {gameMessage && <p className="mt-4 text-red-500">{gameMessage}</p>}
+                  </div>
+                )}
+              </div>
             </div>
+            
           </div>
         </div>
         <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4">Your Cards</h3>
+          <h3 className={`text-xl font-semibold mb-4 p-2 rounded-lg ${currentPlayer === 0 ? 'bg-blue-100' : ''}`}>
+            Your Cards
+          </h3>
           <div className="flex flex-wrap gap-2 justify-center" style={{ minHeight: '220px' }}>
             {players[0]?.map((card, index) => (
               <Card
@@ -628,7 +644,9 @@ function TakiGame() {
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Computer's Cards</h3>
+            <h3 className={`text-xl font-semibold p-2 rounded-lg ${currentPlayer === 1 ? 'bg-blue-100' : ''}`}>
+              Computer's Cards
+            </h3>
             <button
               onClick={() => setRevealComputerCards(!revealComputerCards)}
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
