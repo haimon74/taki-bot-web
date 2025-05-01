@@ -20,37 +20,85 @@ export function getComputerPlay(hand, topDiscard, currentColor, drawAmount, isFi
     return { action: 'draw' };
   }
 
-  // Strategy: Prefer special cards that can cause more disruption
-  const specialCards = playableCards.filter(card => 
-    ['+2', '+3', 'stop', 'changeDirection', 'taki'].includes(card.value)
-  );
+  // If TAKI is active, prioritize playing cards of the current color
+  if (topDiscard?.value === 'taki' || currentColor) {
+    const sameColorCards = playableCards.filter(card => card.color === currentColor);
+    if (sameColorCards.length > 0) {
+      // During TAKI, play cards in this order:
+      // 1. Other special cards (stop, changeDirection, taki)
+      const otherSpecialCards = sameColorCards.filter(card => 
+        ['stop', 'changeDirection', 'taki'].includes(card.value)
+      );
+      if (otherSpecialCards.length > 0) {
+        return { 
+          action: 'play', 
+          card: otherSpecialCards[0],
+          index: hand.indexOf(otherSpecialCards[0])
+        };
+      }
 
-  if (specialCards.length > 0) {
-    // Prefer +2 and +3 cards to make other players draw
-    const drawCards = specialCards.filter(card => ['+2', '+3'].includes(card.value));
-    if (drawCards.length > 0) {
-      return { 
-        action: 'play', 
-        card: drawCards[0],
-        index: hand.indexOf(drawCards[0])
-      };
+      // 2. Regular cards
+      const regularCards = sameColorCards.filter(card => 
+        !['+2', '+3', 'stop', 'changeDirection', 'taki'].includes(card.value)
+      );
+      if (regularCards.length > 0) {
+        return { 
+          action: 'play', 
+          card: regularCards[0],
+          index: hand.indexOf(regularCards[0])
+        };
+      }
+
+      // 3. +2 cards (to make opponent draw)
+      const drawCards = sameColorCards.filter(card => card.value === '+2');
+      if (drawCards.length > 0) {
+        return { 
+          action: 'play', 
+          card: drawCards[0],
+          index: hand.indexOf(drawCards[0])
+        };
+      }
     }
+  }
 
-    // Then prefer stop and change direction cards
-    const controlCards = specialCards.filter(card => ['stop', 'changeDirection'].includes(card.value));
-    if (controlCards.length > 0) {
-      return { 
-        action: 'play', 
-        card: controlCards[0],
-        index: hand.indexOf(controlCards[0])
-      };
-    }
-
-    // Finally, play any other special card
+  // Strategy for regular play (when TAKI is not active):
+  // 1. First priority: Play TAKI to start a sequence
+  const takiCards = playableCards.filter(card => card.value === 'taki');
+  if (takiCards.length > 0) {
     return { 
       action: 'play', 
-      card: specialCards[0],
-      index: hand.indexOf(specialCards[0])
+      card: takiCards[0],
+      index: hand.indexOf(takiCards[0])
+    };
+  }
+
+  // 2. Second priority: Play cards that make opponent draw
+  const drawCards = playableCards.filter(card => ['+2', '+3'].includes(card.value));
+  if (drawCards.length > 0) {
+    return { 
+      action: 'play', 
+      card: drawCards[0],
+      index: hand.indexOf(drawCards[0])
+    };
+  }
+
+  // 3. Third priority: Play control cards
+  const controlCards = playableCards.filter(card => ['stop', 'changeDirection'].includes(card.value));
+  if (controlCards.length > 0) {
+    return { 
+      action: 'play', 
+      card: controlCards[0],
+      index: hand.indexOf(controlCards[0])
+    };
+  }
+
+  // 4. Fourth priority: Play change color cards
+  const changeColorCards = playableCards.filter(card => card.value === 'changeColor');
+  if (changeColorCards.length > 0) {
+    return { 
+      action: 'play', 
+      card: changeColorCards[0],
+      index: hand.indexOf(changeColorCards[0])
     };
   }
 
