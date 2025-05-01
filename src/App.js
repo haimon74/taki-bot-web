@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from './Card';
 import PlayerSelection from './PlayerSelection';
 import ColorSelection from './ColorSelection';
@@ -6,6 +6,7 @@ import JokerSelection from './JokerSelection';
 import KingSelection from './KingSelection';
 import { ColorProvider, useColor } from './context/ColorContext';
 import Fireworks from './Fireworks';
+import { getComputerPlay, getComputerColorChoice, getComputerKingChoice } from './AI';
 
 const colors = ['red', 'blue', 'green', 'yellow'];
 const values = ['1', '3', '4', '5', '6', '7', '8', '9', '+2', 'stop', 'changeDirection', 'changeColor', 'taki', 'king', '+3', '+3Breaker'];
@@ -29,7 +30,6 @@ function createDeck() {
 
 function TakiGame() {
   const [gameStarted, setGameStarted] = useState(false);
-  const [numPlayers, setNumPlayers] = useState(4);
   const [deck, setDeck] = useState([]);
   const [players, setPlayers] = useState([]);
   const [discardPile, setDiscardPile] = useState([]);
@@ -47,10 +47,9 @@ function TakiGame() {
   const [selectedKingCard, setSelectedKingCard] = useState(null);
   const { currentColor, isFirstPlayAfterPlusThree, updateColor, handlePlusThree, handlePlusThreeBreaker, resetColorAfterDraw } = useColor();
 
-  const startGame = (selectedNumPlayers) => {
-    setNumPlayers(selectedNumPlayers);
+  const startGame = () => {
     const newDeck = createDeck();
-    const newPlayers = Array(selectedNumPlayers).fill(null).map(() => newDeck.splice(0, 8));
+    const newPlayers = Array(2).fill(null).map(() => newDeck.splice(0, 8));
     const firstDiscard = newDeck.shift();
     setDeck(newDeck);
     setPlayers(newPlayers);
@@ -127,11 +126,7 @@ function TakiGame() {
 
       if (cardToDiscard.value === 'stop') {
         // In a 2-player game, skip the other player and return to the same player
-        if (numPlayers === 2) {
-          setCurrentPlayer(currentPlayer);
-        } else {
-          nextTurn(1);
-        }
+        setCurrentPlayer(currentPlayer);
         return;
       }
       if (cardToDiscard.value === 'changeDirection') {
@@ -185,12 +180,124 @@ function TakiGame() {
     );
   };
 
-  function handleDraw() {
-    drawCard(currentPlayer, drawAmount);
+  const handleDraw = () => {
+    if (currentPlayer !== 0) {
+      setGameMessage("It's not your turn!");
+      return;
+    }
+    
+    // Draw cards for human player
+    const newPlayers = [...players];
+    const cardsToDraw = deck.splice(0, drawAmount);
+    newPlayers[0] = [...newPlayers[0], ...cardsToDraw];
+    setPlayers(newPlayers);
+    setDeck([...deck]);
     setDrawAmount(1);
     resetColorAfterDraw(discardPile);
-    nextTurn();
-  }
+    
+    // Switch to computer's turn
+    setCurrentPlayer(1);
+  };
+
+  const handleBotTurn = () => {
+    if (currentPlayer === 1 && !gameOver) {
+      const topDiscard = discardPile[discardPile.length - 1];
+      const botHand = players[1];
+      
+      const play = getComputerPlay(botHand, topDiscard, currentColor, drawAmount, isFirstPlayAfterPlusThree);
+      
+      if (play.action === 'draw') {
+        // Draw cards for computer
+        const newPlayers = [...players];
+        const cardsToDraw = deck.splice(0, drawAmount);
+        newPlayers[1] = [...newPlayers[1], ...cardsToDraw];
+        setPlayers(newPlayers);
+        setDeck([...deck]);
+        setDrawAmount(1);
+        resetColorAfterDraw(discardPile);
+        
+        // Switch back to human player
+        setCurrentPlayer(0);
+      } else {
+        const card = play.card;
+        const newPlayers = [...players];
+        const cardIndex = newPlayers[1].findIndex(c => 
+          c.color === card.color && c.value === card.value
+        );
+        
+        if (cardIndex !== -1) {
+          // Remove the card from computer's hand
+          newPlayers[1].splice(cardIndex, 1);
+          setPlayers(newPlayers);
+          
+          // Add the card to discard pile
+          const cardToDiscard = { ...card };
+          setDiscardPile([...discardPile, cardToDiscard]);
+          
+          // Handle special card effects
+          if (card.value === '+2') {
+            if (topDiscard.value === '+2' && drawAmount > 1) {
+              setDrawAmount(drawAmount + 2);
+            } else {
+              setDrawAmount(2);
+            }
+          } else if (card.value === '+3') {
+            setDrawAmount(3);
+            handlePlusThree();
+          } else if (card.value === '+3Breaker') {
+            setDrawAmount(1);
+            const lastCardBeforePlusThree = discardPile.findLast(card => card.value !== '+3' && card.value !== '+3Breaker');
+            handlePlusThreeBreaker(lastCardBeforePlusThree);
+          } else if (card.value === 'stop') {
+            // Computer plays again
+            setTimeout(() => {
+              handleBotTurn();
+            }, 1000);
+            return;
+          } else if (card.value === 'changeDirection') {
+            setDirection(direction * -1);
+          } else if (card.value === 'taki') {
+            setTakiActive(true);
+            // Computer continues playing TAKI
+            setTimeout(() => {
+              handleBotTurn();
+            }, 1000);
+            return;
+          } else if (card.value === 'changeColor') {
+            const selectedColor = getComputerColorChoice(botHand);
+            updateColor(selectedColor);
+          } else if (card.value === 'king') {
+            const kingChoice = getComputerKingChoice(botHand, topDiscard, currentColor, drawAmount, isFirstPlayAfterPlusThree);
+            cardToDiscard.value = kingChoice.value;
+            cardToDiscard.color = kingChoice.color;
+            updateColor(kingChoice.color);
+          } else if (card.value !== '+3' && card.value !== '+3Breaker') {
+            updateColor(card.color);
+          }
+          
+          // Check if computer has won
+          if (newPlayers[1].length === 0) {
+            setGameOver(true);
+            setWinner(1);
+            return;
+          }
+          
+          // Switch back to human player
+          setCurrentPlayer(0);
+        }
+      }
+    }
+  };
+
+  // Add useEffect to handle computer's turn
+  useEffect(() => {
+    if (currentPlayer === 1 && !gameOver) {
+      const timer = setTimeout(() => {
+        handleBotTurn();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentPlayer, gameOver]);
 
   function nextTurn(skip = 1) {
     let next = currentPlayer + direction * skip;
@@ -222,7 +329,12 @@ function TakiGame() {
   };
 
   const handleCardClick = (card) => {
-    const cardIndex = players[currentPlayer].findIndex(c => 
+    if (currentPlayer !== 0) {
+      setGameMessage("It's not your turn!");
+      return;
+    }
+    
+    const cardIndex = players[0].findIndex(c => 
       c.color === card.color && c.value === card.value
     );
     
@@ -278,7 +390,7 @@ function TakiGame() {
         const lastCardBeforePlusThree = discardPile.findLast(card => card.value !== '+3' && card.value !== '+3Breaker');
         handlePlusThreeBreaker(lastCardBeforePlusThree);
       } else if (value === 'stop') {
-        if (numPlayers === 2) {
+        if (currentPlayer === 0) {
           setCurrentPlayer(currentPlayer);
         } else {
           nextTurn(1);
@@ -371,7 +483,7 @@ function TakiGame() {
           <div className="text-center mb-8">
             <Fireworks />
             <h2 className="text-4xl font-bold text-green-600 mb-4"  style={{ position: 'relative', zIndex: 1 }}>
-              🎉 Player {winner + 1} Wins! 🎉
+              🎉 {winner === 0 ? 'You Win!' : 'Computer Wins!'} 🎉
             </h2>
             <button
               onClick={handlePlayAgain}
@@ -393,7 +505,7 @@ function TakiGame() {
                   value={discardPile[discardPile.length - 1].value}
                 />
               )}
-              {takiActive && (
+              {takiActive && currentPlayer === 0 && (
                 <button
                   onClick={handleCloseTaki}
                   className={`text-white px-4 py-2 rounded-lg transition-colors ${
@@ -412,14 +524,19 @@ function TakiGame() {
           
           <div className="text-center mb-4">
             <p className="text-lg">Current Color: <span className="font-bold">{currentColor}</span></p>
-            <p className="text-lg">Current Player: <span className="font-bold">Player {currentPlayer + 1}</span></p>
+            <p className="text-lg">Current Turn: <span className="font-bold">{currentPlayer === 0 ? 'Your Turn' : "Computer's Turn"}</span></p>
           </div>
         </div>
         {!gameOver && (
-          <div className="text-center">
+          <div className="text-center mb-4">
             <button
               onClick={handleDraw}
-              className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+              disabled={currentPlayer !== 0}
+              className={`px-6 py-2 rounded-lg transition-colors ${
+                currentPlayer === 0
+                  ? 'bg-blue-500 text-white hover:bg-blue-600'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               {drawAmount > 1 ? `Draw +${drawAmount} Cards` : 'Draw Card'}
             </button>
@@ -428,45 +545,35 @@ function TakiGame() {
         )}
         <div className="mb-8">
           <h3 className="text-xl font-semibold mb-4">Your Cards</h3>
-          <div className="flex flex-wrap gap-8 justify-center relative" style={{ minHeight: '220px', display: 'flex', flexDirection: 'row', gap: '4px' }}>
-            {players[currentPlayer].map((card, index) => (
+          <div className="flex flex-wrap gap-2 justify-center" style={{ minHeight: '220px' }}>
+            {players[0]?.map((card, index) => (
               <Card
                 key={index}
                 color={card.color}
                 value={card.value}
-                onClick={() => handleCardClick(card)}
-                isPlayable={canPlayCard(card, discardPile[discardPile.length - 1])}
-                isStacked={false}
-                stackIndex={index}
+                onClick={() => currentPlayer === 0 ? handleCardClick(card) : null}
+                isPlayable={currentPlayer === 0 && canPlayCard(card, discardPile[discardPile.length - 1])}
               />
             ))}
           </div>
         </div>
 
         <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4">Other Players</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {players.map((player, playerIndex) => {
-              if (playerIndex === currentPlayer) return null;
-              return (
-                <div key={playerIndex} className="bg-white p-4 rounded-lg shadow">
-                  <h4 className="text-lg font-semibold mb-2">Player {playerIndex + 1}</h4>
-                  <div className="flex items-center" style={{ height: '80px' }}>
-                    {Array(player.length).fill(0).map((_, index) => (
-                      <div
-                        key={index}
-                        className="w-[50px] h-[100px] bg-gray-200 rounded-[10px] border-2 border-gray-300"
-                        style={{
-                          marginLeft: index > 0 ? '-30px' : '0',
-                          zIndex: index,
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">{player.length} cards</p>
-                </div>
-              );
-            })}
+          <h3 className="text-xl font-semibold mb-4">Computer's Cards</h3>
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center justify-center" style={{ height: '80px' }}>
+              {Array(players[1]?.length || 0).fill(0).map((_, index) => (
+                <div
+                  key={index}
+                  className="w-[50px] h-[100px] bg-gray-200 rounded-[10px] border-2 border-gray-300"
+                  style={{
+                    marginLeft: index > 0 ? '-30px' : '0',
+                    zIndex: index,
+                  }}
+                />
+              ))}
+            </div>
+            <p className="text-sm text-gray-600 mt-2 text-center">{players[1]?.length || 0} cards</p>
           </div>
         </div>
       </div>
